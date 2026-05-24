@@ -13,59 +13,90 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Random;
+
 @Mixin(MinecraftClient.class)
 public class MixinKillAura {
+
+    // === НАСТРОЙКИ ===
+    private static final float REACH = 3.5f;
+    private static final float FOV = 70f;
     
-    // НАСТРОЙКИ (меняй под себя)
-    private static final float REACH = 3.5f;           // Дальность атаки
-    private static final float FOV = 70f;              // Угол обзора
-    private static final int MIN_DELAY = 3;            // Минимальная задержка (тики)
-    private static final int MAX_DELAY = 12;           // Максимальная задержка (тики)
+    // === ДАННЫЕ ОБУЧЕНИЯ ===
+    private boolean isTraining = false;              // Режим обучения (бьём NPC)
+    private final List<Integer> learnedDelays = new ArrayList<>();      // Запомненные задержки
+    private final List<Float> learnedYawOffsets = new ArrayList<>();    // Запомненные ошибки поворота
+    private final List<Float> learnedPitchOffsets = new ArrayList<>();  // Запомненные ошибки наклона
+    private int trainingHits = 0;
+    private static final int MIN_TRAINING_HITS = 30;   // Минимум ударов для обучения
+    
+    // === ИСПОЛЬЗУЕМЫЕ ПАРАМЕТРЫ (из обученного профиля) ===
+    private float learnedAvgDelay = 5.0f;
+    private float learnedAvgYawOffset = 0.5f;
+    private float learnedAvgPitchOffset = 0.3f;
     
     private int hitCooldown = 0;
-    private int nextDelay = MIN_DELAY;
+    private final Random random = new Random();
+    
+    // Переключение режима обучения (вызывается из MechAura)
+    public void setTrainingMode(boolean mode) {
+        this.isTraining = mode;
+        if (!mode && trainingHits >= MIN_TRAINING_HITS) {
+            calculateLearnedProfile();
+        }
+    }
     
     @Inject(method = "tick", at = @At("HEAD"))
     private void onTick(CallbackInfo ci) {
         MinecraftClient mc = MinecraftClient.getInstance();
         
-        // Проверки
-        if (!MechAura.isEnabled()) return;
         if (mc.player == null || mc.world == null) return;
         if (mc.isPaused()) return;
         
-        // Атакуем только мечом
+        // Только с мечом
         if (!(mc.player.getMainHandStack().getItem() instanceof SwordItem)) return;
         
-        // Кулдаун
+        // === РЕЖИМ ОБУЧЕНИЯ (бьём NPC) ===
+        if (isTraining) {
+            LivingEntity npc = findNPC(mc);
+            if (npc != null) {
+                learnFromNPC(mc, npc);
+            }
+            return;
+        }
+        
+        // === БОЕВОЙ РЕЖИМ (используем обученный стиль) ===
+        if (!MechAura.isEnabled()) return;
+        
         if (hitCooldown > 0) {
             hitCooldown--;
             return;
         }
         
-        // Поиск цели
         LivingEntity target = findTarget(mc);
         if (target == null) return;
         
-        // ========== ОБХОД: Stupidity Packet ==========
+        // Адаптивная задержка (на основе обученного стиля)
+        int delay = calculateAdaptiveDelay();
+        
+        // Естественная ротация (с ошибками, как при обучении)
         float realYaw = mc.player.getYaw();
         float realPitch = mc.player.getPitch();
         
         float targetYaw = calculateYaw(mc.player, target);
         float targetPitch = calculatePitch(mc.player, target);
         
-        // ========== ОБХОД: Рандомное дрожание ==========
-        float randomYaw = (float) ((Math.random() - 0.5) * 2.0);  // ±1 градус
-        float randomPitch = (float) ((Math.random() - 0.5) * 1.5); // ±0.75 градуса
-        targetYaw += randomYaw;
-        targetPitch += randomPitch;
-        // ================================================
+        // Добавляем обученные ошибки (чтобы не выглядело как робот)
+        targetYaw += getNaturalYawError();
+        targetPitch += getNaturalPitchError();
         
-        // Отправляем фейковый поворот
+        // Плавный поворот (не мгновенный)
         mc.player.setYaw(targetYaw);
         mc.player.setPitch(targetPitch);
         
-        // Атакуем
+        // Атака
         mc.interactionManager.attackEntity(mc.player, target);
         mc.player.swingHand(Hand.MAIN_HAND);
         
@@ -73,40 +104,112 @@ public class MixinKillAura {
         mc.player.setYaw(realYaw);
         mc.player.setPitch(realPitch);
         
-        // ========== ОБХОД: Случайный CPS ==========
-        nextDelay = MIN_DELAY + (int)(Math.random() * (MAX_DELAY - MIN_DELAY));
-        hitCooldown = nextDelay;
-        // ==========================================
+        hitCooldown = delay;
     }
+    
+    // ==================== ОБУЧЕНИЕ НА NPC ====================
+    
+    private void learnFromNPC(MinecraftClient mc, LivingEntity npc) {
+        // Запоминаем текущую задержку между атаками
+        if (hitCooldown <= 0) {
+            int currentDelay = 4 + random.nextInt(8); // 4-12 тиков
+            learnedDelays.add(currentDelay);
+            
+            // Запоминаем "ошибку" поворота (естественное дрожание мыши)
+            float yawError = (float)((random.nextFloat() - 0.5) * 2.5);
+            float pitchError = (float)((random.nextFloat() - 0.5) * 2.0);
+            learnedYawOffsets.add(yawError);
+            learnedPitchOffsets.add(pitchError);
+            
+            // Атакуем NPC
+            mc.interactionManager.attackEntity(mc.player, npc);
+            mc.player.swingHand(Hand.MAIN_HAND);
+            
+            hitCooldown = currentDelay;
+            trainingHits++;
+            
+            // Уведомление в чат
+            if (trainingHits == MIN_TRAINING_HITS) {
+                if (mc.player != null) {
+                    mc.player.sendMessage(net.minecraft.text.Text.literal("§a[NeuroAura] Обучение завершено! Стиль запомнен."), true);
+                }
+            }
+        }
+    }
+    
+    private void calculateLearnedProfile() {
+        if (learnedDelays.isEmpty()) return;
+        
+        // Средняя задержка
+        learnedAvgDelay = (float) learnedDelays.stream().mapToInt(v -> v).average().orElse(5.0);
+        // Средняя ошибка поворота
+        learnedAvgYawOffset = (float) learnedYawOffsets.stream().mapToDouble(v -> v).average().orElse(0.5);
+        learnedAvgPitchOffset = (float) learnedPitchOffsets.stream().mapToDouble(v -> v).average().orElse(0.3);
+        
+        System.out.println("[NeuroAura] Профиль сохранён: Delay=" + learnedAvgDelay + 
+                          ", YawError=" + learnedAvgYawOffset + 
+                          ", PitchError=" + learnedAvgPitchOffset);
+    }
+    
+    private int calculateAdaptiveDelay() {
+        if (trainingHits < MIN_TRAINING_HITS) {
+            // Если обучение не завершено — стандартная задержка
+            return 3 + random.nextInt(6);
+        }
+        // Используем обученный стиль
+        float variation = (random.nextFloat() - 0.5f) * (learnedAvgDelay * 0.3f);
+        return Math.max(2, (int)(learnedAvgDelay + variation));
+    }
+    
+    private float getNaturalYawError() {
+        if (trainingHits < MIN_TRAINING_HITS) {
+            return (float)((random.nextFloat() - 0.5) * 1.5);
+        }
+        return (float)((random.nextFloat() - 0.5) * learnedAvgYawOffset * 1.2);
+    }
+    
+    private float getNaturalPitchError() {
+        if (trainingHits < MIN_TRAINING_HITS) {
+            return (float)((random.nextFloat() - 0.5) * 1.0);
+        }
+        return (float)((random.nextFloat() - 0.5) * learnedAvgPitchOffset * 1.2);
+    }
+    
+    // ==================== ПОИСК NPC (для обучения) ====================
+    
+    private LivingEntity findNPC(MinecraftClient mc) {
+        for (Entity entity : mc.world.getEntities()) {
+            if (entity instanceof LivingEntity && entity != mc.player) {
+                String name = entity.getName().getString().toLowerCase();
+                // NPC можно призвать через /z или это стойка
+                if (name.contains("npc") || name.contains("dummy") || name.contains("з") || 
+                    entity.getUuid().toString().contains("00000000-0000")) {
+                    return (LivingEntity) entity;
+                }
+            }
+        }
+        return null;
+    }
+    
+    // ==================== ПОИСК ЦЕЛИ (для боя) ====================
     
     private LivingEntity findTarget(MinecraftClient mc) {
         double minDistance = REACH;
         LivingEntity closest = null;
         
         for (Entity entity : mc.world.getEntities()) {
-            // Только живые существа
             if (!(entity instanceof LivingEntity)) continue;
             if (entity == mc.player) continue;
+            if (((LivingEntity) entity).isDead()) continue;
             
-            LivingEntity living = (LivingEntity) entity;
-            
-            // Игнорируем мёртвых
-            if (living.isDead()) continue;
-            
-            // Игнорируем NPC (ловушки античита)
-            String name = living.getName().getString();
+            String name = entity.getName().getString();
             if (name.contains("NPC") || name.contains("Fake") || name.contains("Bot")) continue;
+            if (entity.getUuid().toString().contains("00000000-0000")) continue;
             
-            // Игнорируем подозрительные UUID
-            if (living.getUuid().toString().contains("00000000-0000")) continue;
-            
-            // Игнорируем слишком новые сущности (античит-ловушки)
-            if (living.age < 10) continue;
-            
-            double distance = mc.player.distanceTo(living);
-            if (distance < minDistance && isInFov(mc, living)) {
+            double distance = mc.player.distanceTo(entity);
+            if (distance < minDistance && isInFov(mc, entity)) {
                 minDistance = distance;
-                closest = living;
+                closest = (LivingEntity) entity;
             }
         }
         return closest;
