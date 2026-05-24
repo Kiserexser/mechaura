@@ -1,20 +1,16 @@
 {
   "schemaVersion": 1,
-  "id": "mechaura",
+  "id": "neuroaura",
   "version": "1.0.0",
-  "name": "MechAura",
-  "description": "KillAura with bypasses",
+  "name": "NeuroAura",
+  "description": "Обучаемая KillAura с NPC клоном и скрытой атакой",
   "authors": ["Xisal"],
   "license": "MIT",
   "environment": "client",
   "entrypoints": {
-    "client": [
-      "com.xisal.mechaura.MechAura"
-    ]
+    "client": ["com.xisal.mechaura.NeuroAura"]
   },
-  "mixins": [
-    "mechaura.mixins.json"
-  ],
+  "mixins": ["mechaura.mixins.json"],
   "depends": {
     "fabricloader": ">=0.15.0",
     "minecraft": ">=1.21.4",
