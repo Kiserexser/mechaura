@@ -3,10 +3,7 @@
   "minVersion": "0.8",
   "package": "com.xisal.mechaura.mixin",
   "compatibilityLevel": "JAVA_17",
-  "refmap": "mechaura.refmap.json",
-  "mixins": [
-    "MixinKillAura"
-  ],
+  "mixins": [],
   "client": [
     "MixinKillAura"
   ],
