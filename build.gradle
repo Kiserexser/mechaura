@@ -10,17 +10,6 @@ base {
     archivesName = 'mechaura'
 }
 
-loom {
-    splitEnvironmentSourceSets()
-    mods {
-        mechaura {
-            sourceSet sourceSets.main
-        }
-    }
-    // УДАЛИ ЭТУ СТРОКУ:
-    // accessWidenerPath = file("src/main/resources/mechaura.accesswidener")
-}
-
 repositories {
     mavenCentral()
 }
