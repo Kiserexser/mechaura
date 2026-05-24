@@ -3,11 +3,9 @@
   "id": "mechaura",
   "version": "${version}",
   "name": "MechAura",
-  "description": "KillAura только для меча с обходами античитов",
+  "description": "KillAura only for sword",
   "authors": ["Xisal"],
-  "contact": {},
   "license": "MIT",
-  "icon": "assets/mechaura/icon.png",
   "environment": "client",
   "entrypoints": {
     "client": [
