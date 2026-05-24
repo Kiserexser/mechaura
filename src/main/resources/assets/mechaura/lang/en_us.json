@@ -1,5 +1,8 @@
 {
-  "key.mechaura.toggle": "Toggle MechAura",
-  "key.mechaura.train": "Training Mode (Hit NPC)",
-  "category.mechaura": "MechAura"
+  "key.neuroaura.toggle": "Toggle NeuroAura (Silent KillAura)",
+  "key.neuroaura.train": "Training Mode",
+  "key.neuroaura.spawnnpc": "Spawn Training NPC",
+  "key.neuroaura.menu": "Open Stats Menu",
+  "key.neuroaura.reset": "Reset Training Data",
+  "category.neuroaura": "NeuroAura"
 }
