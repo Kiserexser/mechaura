@@ -1,14 +1,14 @@
 {
   "schemaVersion": 1,
-  "id": "neuroaura",
+  "id": "mechaura",
   "version": "1.0.0",
-  "name": "NeuroAura",
-  "description": "Обучаемая KillAura с NPC клоном и скрытой атакой",
+  "name": "MechAura",
+  "description": "KillAura with NPC training",
   "authors": ["Xisal"],
   "license": "MIT",
   "environment": "client",
   "entrypoints": {
-    "client": ["com.xisal.mechaura.NeuroAura"]
+    "client": ["com.xisal.mechaura.MechAura"]
   },
   "mixins": ["mechaura.mixins.json"],
   "depends": {
