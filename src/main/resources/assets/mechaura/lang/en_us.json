@@ -2,7 +2,5 @@
   "key.mechaura.toggle": "Toggle MechAura",
   "key.mechaura.train": "Training Mode",
   "key.mechaura.spawnnpc": "Spawn Training NPC",
-  "key.mechaura.menu": "Open Stats Menu",
-  "key.mechaura.reset": "Reset Training Data",
   "category.mechaura": "MechAura"
 }
