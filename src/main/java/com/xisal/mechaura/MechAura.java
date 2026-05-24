@@ -9,7 +9,6 @@ import net.minecraft.text.Text;
 import org.lwjgl.glfw.GLFW;
 
 public class MechAura implements ClientModInitializer {
-    public static final String MOD_ID = "mechaura";
     private static boolean enabled = true;
     public static KeyBinding toggleKey;
     
@@ -26,7 +25,7 @@ public class MechAura implements ClientModInitializer {
             if (toggleKey.wasPressed()) {
                 enabled = !enabled;
                 if (client.player != null) {
-                    client.player.sendMessage(Text.literal("§b[MechAura] §f" + (enabled ? "§aВключена" : "§cВыключена")), true);
+                    client.player.sendMessage(Text.literal("§b[MechAura] §f" + (enabled ? "§aON" : "§cOFF")), true);
                 }
             }
         });
