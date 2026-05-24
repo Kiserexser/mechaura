@@ -10,17 +10,17 @@ base {
     archivesName = 'mechaura'
 }
 
-repositories {
-    mavenCentral()
-}
-
 loom {
     splitEnvironmentSourceSets()
     mods {
-        "mechaura" {
+        mechaura {
             sourceSet sourceSets.main
         }
     }
+}
+
+repositories {
+    mavenCentral()
 }
 
 dependencies {
@@ -42,13 +42,6 @@ tasks.withType(JavaCompile).configureEach {
 }
 
 java {
-    withSourcesJar()
     sourceCompatibility = JavaVersion.VERSION_21
     targetCompatibility = JavaVersion.VERSION_21
-}
-
-jar {
-    from("LICENSE") {
-        rename { "${it}_${project.base.archivesName.get()}" }
-    }
 }
