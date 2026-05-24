@@ -17,6 +17,8 @@ loom {
             sourceSet sourceSets.main
         }
     }
+    // ВАЖНО: добавляем access widener (если нужен)
+    accessWidenerPath = file("src/main/resources/mechaura.accesswidener")
 }
 
 repositories {
@@ -24,10 +26,16 @@ repositories {
 }
 
 dependencies {
+    // Minecraft
     minecraft "com.mojang:minecraft:1.21.4"
     mappings "net.fabricmc:yarn:1.21.4+build.1:v2"
+    
+    // Fabric
     modImplementation "net.fabricmc:fabric-loader:0.16.9"
     modImplementation "net.fabricmc.fabric-api:fabric-api:0.110.0+1.21.4"
+    
+    // Дополнительные библиотеки (если нужны)
+    include modImplementation("net.fabricmc.fabric-api:fabric-api:0.110.0+1.21.4")
 }
 
 processResources {
