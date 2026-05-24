@@ -3,7 +3,6 @@ package com.xisal.mechaura;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
-import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.option.KeyBinding;
 import net.minecraft.client.util.InputUtil;
 import net.minecraft.text.Text;
@@ -16,8 +15,6 @@ public class MechAura implements ClientModInitializer {
     public static KeyBinding toggleKey;
     public static KeyBinding trainingKey;
     public static KeyBinding spawnNPCKey;
-    public static KeyBinding menuKey;
-    public static KeyBinding resetKey;
     
     @Override
     public void onInitializeClient() {
@@ -42,20 +39,6 @@ public class MechAura implements ClientModInitializer {
             "category.mechaura"
         ));
         
-        menuKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
-            "key.mechaura.menu",
-            InputUtil.Type.KEYSYM,
-            GLFW.GLFW_KEY_H,
-            "category.mechaura"
-        ));
-        
-        resetKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
-            "key.mechaura.reset",
-            InputUtil.Type.KEYSYM,
-            GLFW.GLFW_KEY_K,
-            "category.mechaura"
-        ));
-        
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             if (client.player == null) return;
             
@@ -73,26 +56,7 @@ public class MechAura implements ClientModInitializer {
                 client.player.networkHandler.sendChatCommand("summon armor_stand ~ ~ ~ {CustomName:'{\"text\":\"TrainingDummy\"}',CustomNameVisible:1b,Invulnerable:1b,NoGravity:1b,ShowArms:1b}");
                 client.player.sendMessage(Text.literal("§a[Spawned] §fTraining NPC"), true);
             }
-            
-            if (menuKey.wasPressed()) {
-                openMenu(client);
-            }
-            
-            if (resetKey.wasPressed()) {
-                MixinKillAura.resetProfile();
-                client.player.sendMessage(Text.literal("§c[Reset] §fОбучение сброшено"), true);
-            }
         });
-    }
-    
-    private void openMenu(MinecraftClient client) {
-        client.player.sendMessage(Text.literal("§6=== §eMechAura Menu §6==="), false);
-        client.player.sendMessage(Text.literal("§7» §fУдаров обучено: §e" + MixinKillAura.getTrainingHits()), false);
-        client.player.sendMessage(Text.literal("§7» §fСредняя задержка: §e" + MixinKillAura.getAvgDelay() + " тиков"), false);
-        client.player.sendMessage(Text.literal("§7» §fСредняя ошибка Yaw: §e" + MixinKillAura.getAvgYawError()), false);
-        client.player.sendMessage(Text.literal("§7» §fСредняя ошибка Pitch: §e" + MixinKillAura.getAvgPitchError()), false);
-        client.player.sendMessage(Text.literal("§7» §fОбучение критическим ударам: §e" + (MixinKillAura.isCritsLearned() ? "§aДа" : "§cНет")), false);
-        client.player.sendMessage(Text.literal("§e[K] §f- Сбросить всё"), false);
     }
     
     public static boolean isEnabled() { return enabled; }
