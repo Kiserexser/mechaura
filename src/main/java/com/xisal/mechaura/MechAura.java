@@ -3,57 +3,106 @@ package com.xisal.mechaura;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
+import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.option.KeyBinding;
 import net.minecraft.client.util.InputUtil;
 import net.minecraft.text.Text;
+import net.minecraft.util.Formatting;
 import org.lwjgl.glfw.GLFW;
 
-public class MechAura implements ClientModInitializer {
-    private static boolean enabled = true;
+public class NeuroAura implements ClientModInitializer {
+    private static boolean enabled = false;
     private static boolean trainingMode = false;
+    
     public static KeyBinding toggleKey;
     public static KeyBinding trainingKey;
+    public static KeyBinding spawnNPCKey;
+    public static KeyBinding menuKey;
+    public static KeyBinding resetKey;
     
     @Override
     public void onInitializeClient() {
-        // Клавиша R - вкл/выкл KillAura
+        // R - вкл/выкл KillAura
         toggleKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
-            "key.mechaura.toggle",
+            "key.neuroaura.toggle",
             InputUtil.Type.KEYSYM,
             GLFW.GLFW_KEY_R,
-            "category.mechaura"
+            "category.neuroaura"
         ));
         
-        // Клавиша G - режим обучения (бьём NPC)
+        // G - режим обучения
         trainingKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
-            "key.mechaura.train",
+            "key.neuroaura.train",
             InputUtil.Type.KEYSYM,
             GLFW.GLFW_KEY_G,
-            "category.mechaura"
+            "category.neuroaura"
+        ));
+        
+        // Z - спавн NPC клона
+        spawnNPCKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+            "key.neuroaura.spawnnpc",
+            InputUtil.Type.KEYSYM,
+            GLFW.GLFW_KEY_Z,
+            "category.neuroaura"
+        ));
+        
+        // H - открыть меню
+        menuKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+            "key.neuroaura.menu",
+            InputUtil.Type.KEYSYM,
+            GLFW.GLFW_KEY_H,
+            "category.neuroaura"
+        ));
+        
+        // K - сброс профиля
+        resetKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+            "key.neuroaura.reset",
+            InputUtil.Type.KEYSYM,
+            GLFW.GLFW_KEY_K,
+            "category.neuroaura"
         ));
         
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
+            if (client.player == null) return;
+            
             if (toggleKey.wasPressed()) {
                 enabled = !enabled;
-                if (client.player != null) {
-                    client.player.sendMessage(Text.literal("§b[MechAura] §f" + (enabled ? "§aON" : "§cOFF")), true);
-                }
+                client.player.sendMessage(Text.literal((enabled ? "§a[ON]" : "§c[OFF]") + " §fNeuroAura"), true);
             }
             
             if (trainingKey.wasPressed()) {
                 trainingMode = !trainingMode;
-                if (client.player != null) {
-                    client.player.sendMessage(Text.literal("§b[MechAura] §eРежим обучения: " + (trainingMode ? "§aВКЛЮЧЁН" : "§cВЫКЛЮЧЁН")), true);
-                }
+                client.player.sendMessage(Text.literal("§e[Training] §f" + (trainingMode ? "§aStarted" : "§cStopped")), true);
+            }
+            
+            if (spawnNPCKey.wasPressed()) {
+                // Отправляем команду на спавн стойки
+                client.player.networkHandler.sendChatCommand("summon armor_stand ~ ~ ~ {CustomName:'{\"text\":\"TrainingDummy\"}',CustomNameVisible:1b,Invulnerable:1b,NoGravity:1b,ShowArms:1b}");
+                client.player.sendMessage(Text.literal("§a[Spawned] §fTraining NPC"), true);
+            }
+            
+            if (menuKey.wasPressed()) {
+                openMenu(client);
+            }
+            
+            if (resetKey.wasPressed()) {
+                MixinKillAura.resetProfile();
+                client.player.sendMessage(Text.literal("§c[Reset] §fОбучение сброшено"), true);
             }
         });
     }
     
-    public static boolean isEnabled() {
-        return enabled;
+    private void openMenu(MinecraftClient client) {
+        client.player.sendMessage(Text.literal("§6=== §eNeuroAura Menu §6==="), false);
+        client.player.sendMessage(Text.literal("§7» §fУдаров обучено: §e" + MixinKillAura.getTrainingHits()), false);
+        client.player.sendMessage(Text.literal("§7» §fСредняя задержка: §e" + MixinKillAura.getAvgDelay() + " тиков"), false);
+        client.player.sendMessage(Text.literal("§7» §fСредняя ошибка Yaw: §e" + MixinKillAura.getAvgYawError()), false);
+        client.player.sendMessage(Text.literal("§7» §fСредняя ошибка Pitch: §e" + MixinKillAura.getAvgPitchError()), false);
+        client.player.sendMessage(Text.literal("§7» §fОбучение критическим ударам: §e" + (MixinKillAura.isCritsLearned() ? "§aДа" : "§cНет")), false);
+        client.player.sendMessage(Text.literal("§7"), false);
+        client.player.sendMessage(Text.literal("§e[K] §f- Сбросить всё"), false);
     }
     
-    public static boolean isTrainingMode() {
-        return trainingMode;
-    }
+    public static boolean isEnabled() { return enabled; }
+    public static boolean isTrainingMode() { return trainingMode; }
 }
