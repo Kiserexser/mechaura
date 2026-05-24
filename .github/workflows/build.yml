@@ -17,5 +17,5 @@ jobs:
     - name: Upload JAR
       uses: actions/upload-artifact@v4
       with:
-        name: mechaura
+        name: mechaura-mod
         path: build/libs/*.jar
