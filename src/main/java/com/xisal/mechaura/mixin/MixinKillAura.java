@@ -15,19 +15,23 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(MinecraftClient.class)
 public class MixinKillAura {
+    
     private static final float REACH = 3.5f;
     private static final float FOV = 70f;
     private static final int MIN_DELAY = 4;
     private static final int MAX_DELAY = 8;
+    
     private int hitCooldown = 0;
     
     @Inject(method = "tick", at = @At("HEAD"))
     private void onTick(CallbackInfo ci) {
         MinecraftClient mc = MinecraftClient.getInstance();
-        if (!MechAura.enabled) return;
-        if (mc.player == null || mc.world == null) return;
         
-        // Только с мечом
+        if (!MechAura.isEnabled()) return;
+        if (mc.player == null || mc.world == null) return;
+        if (mc.isPaused()) return;
+        
+        // Проверяем, что в руке меч
         if (!(mc.player.getMainHandStack().getItem() instanceof SwordItem)) return;
         
         if (hitCooldown > 0) {
@@ -65,7 +69,10 @@ public class MixinKillAura {
             if (!(entity instanceof LivingEntity)) continue;
             if (entity == mc.player) continue;
             if (((LivingEntity) entity).isDead()) continue;
-            if (entity.getName().getString().contains("NPC")) continue;
+            
+            // Игнорируем NPC
+            String name = entity.getName().getString();
+            if (name.contains("NPC") || name.contains("Fake") || name.contains("Bot")) continue;
             
             double distance = mc.player.distanceTo(entity);
             if (distance < minDistance && isInFov(mc, entity)) {
