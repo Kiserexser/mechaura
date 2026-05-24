@@ -25,23 +25,19 @@ public class MixinKillAura {
     private static final float FOV = 70f;
     
     // Данные обучения
-    private static final List<Integer> learnedDelays = new ArrayList<>();
-    private static final List<Float> learnedYawOffsets = new ArrayList<>();
-    private static final List<Float> learnedPitchOffsets = new ArrayList<>();
-    private static final List<Boolean> learnedCrits = new ArrayList<>();
-    private static int trainingHits = 0;
+    private final List<Integer> learnedDelays = new ArrayList<>();
+    private final List<Float> learnedYawOffsets = new ArrayList<>();
+    private final List<Float> learnedPitchOffsets = new ArrayList<>();
+    private int trainingHits = 0;
     private static final int MIN_TRAINING_HITS = 20;
     
     // Обученные параметры
-    private static float learnedAvgDelay = 5.0f;
-    private static float learnedAvgYawOffset = 0.5f;
-    private static float learnedAvgPitchOffset = 0.3f;
-    private static boolean learnedCritChance = false;
-    private static boolean hasLearned = false;
+    private float learnedAvgDelay = 5.0f;
+    private float learnedAvgYawOffset = 0.5f;
+    private float learnedAvgPitchOffset = 0.3f;
+    private boolean hasLearned = false;
     
     private int hitCooldown = 0;
-    private int jumpCooldown = 0;
-    private boolean isCritQueued = false;
     private final Random random = new Random();
     
     @Inject(method = "tick", at = @At("HEAD"))
@@ -67,12 +63,6 @@ public class MixinKillAura {
         
         if (hitCooldown > 0) {
             hitCooldown--;
-            if (isCritQueued && jumpCooldown <= 0 && mc.player.isOnGround()) {
-                mc.player.jump();
-                jumpCooldown = 4;
-                isCritQueued = false;
-            }
-            if (jumpCooldown > 0) jumpCooldown--;
             return;
         }
         
@@ -93,24 +83,20 @@ public class MixinKillAura {
             targetPitch += (random.nextFloat() - 0.5f) * 1.0f;
         }
         
-        // Исправлено: 4 аргумента (yaw, pitch, onGround, horizontalCollision)
+        // Отправляем фейковый поворот (другие видят)
         mc.player.networkHandler.sendPacket(new PlayerMoveC2SPacket.LookAndOnGround(targetYaw, targetPitch, mc.player.isOnGround(), false));
         
         // Атакуем
         mc.interactionManager.attackEntity(mc.player, target);
         mc.player.swingHand(Hand.MAIN_HAND);
         
-        // Исправлено: 4 аргумента
+        // Возвращаем реальный поворот (твой экран не меняется)
         mc.player.networkHandler.sendPacket(new PlayerMoveC2SPacket.LookAndOnGround(realYaw, realPitch, mc.player.isOnGround(), false));
         
         if (hasLearned) {
             hitCooldown = calculateAdaptiveDelay();
         } else {
             hitCooldown = 3 + random.nextInt(6);
-        }
-        
-        if (hasLearned && learnedCritChance && random.nextFloat() < 0.3f) {
-            isCritQueued = true;
         }
     }
     
@@ -122,9 +108,6 @@ public class MixinKillAura {
         float pitchError = (random.nextFloat() - 0.5f) * 2.0f;
         learnedYawOffsets.add(yawError);
         learnedPitchOffsets.add(pitchError);
-        
-        boolean wasCrit = !mc.player.isOnGround() && mc.player.fallDistance > 0;
-        learnedCrits.add(wasCrit);
         
         mc.interactionManager.attackEntity(mc.player, npc);
         mc.player.swingHand(Hand.MAIN_HAND);
@@ -147,28 +130,6 @@ public class MixinKillAura {
         learnedAvgDelay = (float) learnedDelays.stream().mapToInt(v -> v).average().orElse(5.0f);
         learnedAvgYawOffset = (float) learnedYawOffsets.stream().mapToDouble(v -> v).average().orElse(0.5f);
         learnedAvgPitchOffset = (float) learnedPitchOffsets.stream().mapToDouble(v -> v).average().orElse(0.3f);
-        
-        long critCount = learnedCrits.stream().filter(b -> b).count();
-        learnedCritChance = critCount > 0;
-    }
-    
-    // Статические методы для доступа из MechAura
-    public static int getTrainingHits() { return trainingHits; }
-    public static float getAvgDelay() { return learnedAvgDelay; }
-    public static float getAvgYawError() { return learnedAvgYawOffset; }
-    public static float getAvgPitchError() { return learnedAvgPitchOffset; }
-    public static boolean isCritsLearned() { return learnedCritChance; }
-    public static void resetProfile() {
-        learnedDelays.clear();
-        learnedYawOffsets.clear();
-        learnedPitchOffsets.clear();
-        learnedCrits.clear();
-        trainingHits = 0;
-        hasLearned = false;
-        learnedCritChance = false;
-        learnedAvgDelay = 5.0f;
-        learnedAvgYawOffset = 0.5f;
-        learnedAvgPitchOffset = 0.3f;
     }
     
     private int calculateAdaptiveDelay() {
