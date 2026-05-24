@@ -15,46 +15,32 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(MinecraftClient.class)
 public class MixinKillAura {
-    
     private static final float REACH = 3.5f;
     private static final float FOV = 70f;
     private static final int MIN_DELAY = 4;
     private static final int MAX_DELAY = 8;
-    
     private int hitCooldown = 0;
     
     @Inject(method = "tick", at = @At("HEAD"))
     private void onTick(CallbackInfo ci) {
         MinecraftClient mc = MinecraftClient.getInstance();
+        if (!MechAura.isEnabled() || mc.player == null || mc.world == null) return;
         
-        if (!MechAura.isEnabled()) return;
-        if (mc.player == null || mc.world == null) return;
-        if (mc.isPaused()) return;
-        
-        // Проверяем, что в руке меч
         if (!(mc.player.getMainHandStack().getItem() instanceof SwordItem)) return;
-        
-        if (hitCooldown > 0) {
-            hitCooldown--;
-            return;
-        }
+        if (hitCooldown > 0) { hitCooldown--; return; }
         
         LivingEntity target = findTarget(mc);
         if (target == null) return;
         
-        // Stupidity Packet
         float realYaw = mc.player.getYaw();
         float realPitch = mc.player.getPitch();
-        
         float targetYaw = calculateYaw(mc.player, target);
         float targetPitch = calculatePitch(mc.player, target);
         
         mc.player.setYaw(targetYaw);
         mc.player.setPitch(targetPitch);
-        
         mc.interactionManager.attackEntity(mc.player, target);
         mc.player.swingHand(Hand.MAIN_HAND);
-        
         mc.player.setYaw(realYaw);
         mc.player.setPitch(realPitch);
         
@@ -64,16 +50,9 @@ public class MixinKillAura {
     private LivingEntity findTarget(MinecraftClient mc) {
         double minDistance = REACH;
         LivingEntity closest = null;
-        
         for (Entity entity : mc.world.getEntities()) {
-            if (!(entity instanceof LivingEntity)) continue;
-            if (entity == mc.player) continue;
+            if (!(entity instanceof LivingEntity) || entity == mc.player) continue;
             if (((LivingEntity) entity).isDead()) continue;
-            
-            // Игнорируем NPC
-            String name = entity.getName().getString();
-            if (name.contains("NPC") || name.contains("Fake") || name.contains("Bot")) continue;
-            
             double distance = mc.player.distanceTo(entity);
             if (distance < minDistance && isInFov(mc, entity)) {
                 minDistance = distance;
