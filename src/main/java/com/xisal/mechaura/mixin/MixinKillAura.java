@@ -93,15 +93,15 @@ public class MixinKillAura {
             targetPitch += (random.nextFloat() - 0.5f) * 1.0f;
         }
         
-        // Отправляем фейковый поворот (другие видят)
-        mc.player.networkHandler.sendPacket(new PlayerMoveC2SPacket.LookAndOnGround(targetYaw, targetPitch, mc.player.isOnGround()));
+        // Исправлено: 4 аргумента (yaw, pitch, onGround, horizontalCollision)
+        mc.player.networkHandler.sendPacket(new PlayerMoveC2SPacket.LookAndOnGround(targetYaw, targetPitch, mc.player.isOnGround(), false));
         
         // Атакуем
         mc.interactionManager.attackEntity(mc.player, target);
         mc.player.swingHand(Hand.MAIN_HAND);
         
-        // Возвращаем реальный поворот (твой экран не меняется)
-        mc.player.networkHandler.sendPacket(new PlayerMoveC2SPacket.LookAndOnGround(realYaw, realPitch, mc.player.isOnGround()));
+        // Исправлено: 4 аргумента
+        mc.player.networkHandler.sendPacket(new PlayerMoveC2SPacket.LookAndOnGround(realYaw, realPitch, mc.player.isOnGround(), false));
         
         if (hasLearned) {
             hitCooldown = calculateAdaptiveDelay();
@@ -152,12 +152,12 @@ public class MixinKillAura {
         learnedCritChance = critCount > 0;
     }
     
+    // Статические методы для доступа из MechAura
     public static int getTrainingHits() { return trainingHits; }
     public static float getAvgDelay() { return learnedAvgDelay; }
     public static float getAvgYawError() { return learnedAvgYawOffset; }
     public static float getAvgPitchError() { return learnedAvgPitchOffset; }
     public static boolean isCritsLearned() { return learnedCritChance; }
-    
     public static void resetProfile() {
         learnedDelays.clear();
         learnedYawOffsets.clear();
@@ -166,6 +166,9 @@ public class MixinKillAura {
         trainingHits = 0;
         hasLearned = false;
         learnedCritChance = false;
+        learnedAvgDelay = 5.0f;
+        learnedAvgYawOffset = 0.5f;
+        learnedAvgPitchOffset = 0.3f;
     }
     
     private int calculateAdaptiveDelay() {
