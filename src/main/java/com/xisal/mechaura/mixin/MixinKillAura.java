@@ -15,48 +15,98 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(MinecraftClient.class)
 public class MixinKillAura {
-    private static final float REACH = 3.5f;
-    private static final float FOV = 70f;
-    private static final int MIN_DELAY = 4;
-    private static final int MAX_DELAY = 8;
+    
+    // НАСТРОЙКИ (меняй под себя)
+    private static final float REACH = 3.5f;           // Дальность атаки
+    private static final float FOV = 70f;              // Угол обзора
+    private static final int MIN_DELAY = 3;            // Минимальная задержка (тики)
+    private static final int MAX_DELAY = 12;           // Максимальная задержка (тики)
+    
     private int hitCooldown = 0;
+    private int nextDelay = MIN_DELAY;
     
     @Inject(method = "tick", at = @At("HEAD"))
     private void onTick(CallbackInfo ci) {
         MinecraftClient mc = MinecraftClient.getInstance();
-        if (!MechAura.isEnabled() || mc.player == null || mc.world == null) return;
         
+        // Проверки
+        if (!MechAura.isEnabled()) return;
+        if (mc.player == null || mc.world == null) return;
+        if (mc.isPaused()) return;
+        
+        // Атакуем только мечом
         if (!(mc.player.getMainHandStack().getItem() instanceof SwordItem)) return;
-        if (hitCooldown > 0) { hitCooldown--; return; }
         
+        // Кулдаун
+        if (hitCooldown > 0) {
+            hitCooldown--;
+            return;
+        }
+        
+        // Поиск цели
         LivingEntity target = findTarget(mc);
         if (target == null) return;
         
+        // ========== ОБХОД: Stupidity Packet ==========
         float realYaw = mc.player.getYaw();
         float realPitch = mc.player.getPitch();
+        
         float targetYaw = calculateYaw(mc.player, target);
         float targetPitch = calculatePitch(mc.player, target);
         
+        // ========== ОБХОД: Рандомное дрожание ==========
+        float randomYaw = (float) ((Math.random() - 0.5) * 2.0);  // ±1 градус
+        float randomPitch = (float) ((Math.random() - 0.5) * 1.5); // ±0.75 градуса
+        targetYaw += randomYaw;
+        targetPitch += randomPitch;
+        // ================================================
+        
+        // Отправляем фейковый поворот
         mc.player.setYaw(targetYaw);
         mc.player.setPitch(targetPitch);
+        
+        // Атакуем
         mc.interactionManager.attackEntity(mc.player, target);
         mc.player.swingHand(Hand.MAIN_HAND);
+        
+        // Возвращаем реальный поворот
         mc.player.setYaw(realYaw);
         mc.player.setPitch(realPitch);
         
-        hitCooldown = MIN_DELAY + (int)(Math.random() * (MAX_DELAY - MIN_DELAY));
+        // ========== ОБХОД: Случайный CPS ==========
+        nextDelay = MIN_DELAY + (int)(Math.random() * (MAX_DELAY - MIN_DELAY));
+        hitCooldown = nextDelay;
+        // ==========================================
     }
     
     private LivingEntity findTarget(MinecraftClient mc) {
         double minDistance = REACH;
         LivingEntity closest = null;
+        
         for (Entity entity : mc.world.getEntities()) {
-            if (!(entity instanceof LivingEntity) || entity == mc.player) continue;
-            if (((LivingEntity) entity).isDead()) continue;
-            double distance = mc.player.distanceTo(entity);
-            if (distance < minDistance && isInFov(mc, entity)) {
+            // Только живые существа
+            if (!(entity instanceof LivingEntity)) continue;
+            if (entity == mc.player) continue;
+            
+            LivingEntity living = (LivingEntity) entity;
+            
+            // Игнорируем мёртвых
+            if (living.isDead()) continue;
+            
+            // Игнорируем NPC (ловушки античита)
+            String name = living.getName().getString();
+            if (name.contains("NPC") || name.contains("Fake") || name.contains("Bot")) continue;
+            
+            // Игнорируем подозрительные UUID
+            if (living.getUuid().toString().contains("00000000-0000")) continue;
+            
+            // Игнорируем слишком новые сущности (античит-ловушки)
+            if (living.age < 10) continue;
+            
+            double distance = mc.player.distanceTo(living);
+            if (distance < minDistance && isInFov(mc, living)) {
                 minDistance = distance;
-                closest = (LivingEntity) entity;
+                closest = living;
             }
         }
         return closest;
