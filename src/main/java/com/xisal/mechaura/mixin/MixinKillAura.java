@@ -1,11 +1,12 @@
 package com.xisal.mechaura.mixin;
 
-import com.xisal.mechaura.MechAura;
+import com.xisal.mechaura.NeuroAura;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.SwordItem;
+import net.minecraft.network.packet.c2s.play.PlayerMoveC2SPacket;
 import net.minecraft.util.Hand;
 import net.minecraft.util.math.Vec3d;
 import org.spongepowered.asm.mixin.Mixin;
@@ -24,20 +25,27 @@ public class MixinKillAura {
     private static final float FOV = 70f;
     
     // Данные обучения
-    private final List<Integer> learnedDelays = new ArrayList<>();
-    private final List<Float> learnedYawOffsets = new ArrayList<>();
-    private final List<Float> learnedPitchOffsets = new ArrayList<>();
-    private int trainingHits = 0;
-    private static final int MIN_TRAINING_HITS = 30;
+    private static final List<Integer> learnedDelays = new ArrayList<>();
+    private static final List<Float> learnedYawOffsets = new ArrayList<>();
+    private static final List<Float> learnedPitchOffsets = new ArrayList<>();
+    private static final List<Boolean> learnedCrits = new ArrayList<>(); // Запоминаем, был ли крит
+    private static int trainingHits = 0;
+    private static final int MIN_TRAINING_HITS = 20;
     
     // Обученные параметры
-    private float learnedAvgDelay = 5.0f;
-    private float learnedAvgYawOffset = 0.5f;
-    private float learnedAvgPitchOffset = 0.3f;
-    private boolean hasLearned = false;
+    private static float learnedAvgDelay = 5.0f;
+    private static float learnedAvgYawOffset = 0.5f;
+    private static float learnedAvgPitchOffset = 0.3f;
+    private static boolean learnedCritChance = false;
+    private static boolean hasLearned = false;
     
     private int hitCooldown = 0;
+    private int jumpCooldown = 0;
+    private boolean isCritQueued = false;
     private final Random random = new Random();
+    
+    private float targetYaw = 0;
+    private float targetPitch = 0;
     
     @Inject(method = "tick", at = @At("HEAD"))
     private void onTick(CallbackInfo ci) {
@@ -49,8 +57,8 @@ public class MixinKillAura {
         // Только с мечом
         if (!(mc.player.getMainHandStack().getItem() instanceof SwordItem)) return;
         
-        // === РЕЖИМ ОБУЧЕНИЯ (клавиша G) ===
-        if (MechAura.isTrainingMode()) {
+        // === РЕЖИМ ОБУЧЕНИЯ ===
+        if (NeuroAura.isTrainingMode()) {
             LivingEntity npc = findNPC(mc);
             if (npc != null && hitCooldown <= 0) {
                 learnFromNPC(mc, npc);
@@ -58,26 +66,33 @@ public class MixinKillAura {
             return;
         }
         
-        // === БОЕВОЙ РЕЖИМ (клавиша R) ===
-        if (!MechAura.isEnabled()) return;
+        // === БОЕВОЙ РЕЖИМ (СКРЫТАЯ АТАКА) ===
+        if (!NeuroAura.isEnabled()) return;
         
         if (hitCooldown > 0) {
             hitCooldown--;
+            // Обработка критического удара
+            if (isCritQueued && jumpCooldown <= 0 && mc.player.isOnGround()) {
+                mc.player.jump();
+                jumpCooldown = 4;
+                isCritQueued = false;
+            }
+            if (jumpCooldown > 0) jumpCooldown--;
             return;
         }
         
         LivingEntity target = findTarget(mc);
         if (target == null) return;
         
-        // Сохраняем реальный поворот
+        // Сохраняем реальный поворот (для отображения на F3)
         float realYaw = mc.player.getYaw();
         float realPitch = mc.player.getPitch();
         
-        // Целевой поворот
-        float targetYaw = calculateYaw(mc.player, target);
-        float targetPitch = calculatePitch(mc.player, target);
+        // Рассчитываем целевой поворот
+        targetYaw = calculateYaw(mc.player, target);
+        targetPitch = calculatePitch(mc.player, target);
         
-        // Добавляем естественную ошибку (из обученного профиля или случайную)
+        // Добавляем ошибки из обучения
         if (hasLearned) {
             targetYaw += getNaturalYawError();
             targetPitch += getNaturalPitchError();
@@ -86,38 +101,45 @@ public class MixinKillAura {
             targetPitch += (random.nextFloat() - 0.5f) * 1.0f;
         }
         
-        // Поворачиваемся
-        mc.player.setYaw(targetYaw);
-        mc.player.setPitch(targetPitch);
+        // === СКРЫТАЯ РОТАЦИЯ ===
+        // Отправляем фейковый пакет поворота на сервер (другие игроки видят поворот)
+        mc.player.networkHandler.sendPacket(new PlayerMoveC2SPacket.LookAndOnGround(targetYaw, targetPitch, mc.player.isOnGround()));
         
         // Атакуем
         mc.interactionManager.attackEntity(mc.player, target);
         mc.player.swingHand(Hand.MAIN_HAND);
         
-        // Возвращаем реальный поворот
-        mc.player.setYaw(realYaw);
-        mc.player.setPitch(realPitch);
+        // Отправляем обратно реальный поворот (на F3 и твой экран не меняется)
+        mc.player.networkHandler.sendPacket(new PlayerMoveC2SPacket.LookAndOnGround(realYaw, realPitch, mc.player.isOnGround()));
         
-        // Задержка между атаками (из обученного профиля или стандартная)
+        // Задержка на основе обучения
         if (hasLearned) {
             hitCooldown = calculateAdaptiveDelay();
         } else {
             hitCooldown = 3 + random.nextInt(6);
+        }
+        
+        // Проверка на критический удар (если обучен)
+        if (hasLearned && learnedCritChance && random.nextFloat() < 0.3f) {
+            isCritQueued = true;
         }
     }
     
     // ==================== ОБУЧЕНИЕ ====================
     
     private void learnFromNPC(MinecraftClient mc, LivingEntity npc) {
-        // Запоминаем задержку
         int delay = 3 + random.nextInt(8);
         learnedDelays.add(delay);
         
-        // Запоминаем "ошибку" поворота
+        // Запоминаем ошибки поворота
         float yawError = (random.nextFloat() - 0.5f) * 2.5f;
         float pitchError = (random.nextFloat() - 0.5f) * 2.0f;
         learnedYawOffsets.add(yawError);
         learnedPitchOffsets.add(pitchError);
+        
+        // Запоминаем, был ли критический удар (прыжок)
+        boolean wasCrit = !mc.player.isOnGround() && mc.player.fallDistance > 0;
+        learnedCrits.add(wasCrit);
         
         // Атакуем NPC
         mc.interactionManager.attackEntity(mc.player, npc);
@@ -126,12 +148,11 @@ public class MixinKillAura {
         hitCooldown = delay;
         trainingHits++;
         
-        // Если набрали достаточно ударов - сохраняем профиль
-        if (trainingHits == MIN_TRAINING_HITS && !hasLearned) {
+        if (trainingHits >= MIN_TRAINING_HITS && !hasLearned) {
             calculateLearnedProfile();
             hasLearned = true;
             if (mc.player != null) {
-                mc.player.sendMessage(net.minecraft.text.Text.literal("§a[NeuroAura] Обучение завершено! Стиль запомнен."), true);
+                mc.player.sendMessage(net.minecraft.text.Text.literal("§a[NeuroAura] §fОбучение завершено! Профиль сохранён"), true);
             }
         }
     }
@@ -143,9 +164,31 @@ public class MixinKillAura {
         learnedAvgYawOffset = (float) learnedYawOffsets.stream().mapToDouble(v -> v).average().orElse(0.5f);
         learnedAvgPitchOffset = (float) learnedPitchOffsets.stream().mapToDouble(v -> v).average().orElse(0.3f);
         
+        // Считаем процент критических ударов во время обучения
+        long critCount = learnedCrits.stream().filter(b -> b).count();
+        learnedCritChance = critCount > 0;
+        
         System.out.println("[NeuroAura] Delay=" + learnedAvgDelay + 
                           ", YawError=" + learnedAvgYawOffset + 
-                          ", PitchError=" + learnedAvgPitchOffset);
+                          ", PitchError=" + learnedAvgPitchOffset +
+                          ", Crits=" + critCount + "/" + trainingHits);
+    }
+    
+    // Статические методы для меню
+    public static int getTrainingHits() { return trainingHits; }
+    public static float getAvgDelay() { return learnedAvgDelay; }
+    public static float getAvgYawError() { return learnedAvgYawOffset; }
+    public static float getAvgPitchError() { return learnedAvgPitchOffset; }
+    public static boolean isCritsLearned() { return learnedCritChance; }
+    
+    public static void resetProfile() {
+        learnedDelays.clear();
+        learnedYawOffsets.clear();
+        learnedPitchOffsets.clear();
+        learnedCrits.clear();
+        trainingHits = 0;
+        hasLearned = false;
+        learnedCritChance = false;
     }
     
     private int calculateAdaptiveDelay() {
@@ -167,7 +210,7 @@ public class MixinKillAura {
         for (Entity entity : mc.world.getEntities()) {
             if (entity instanceof LivingEntity && entity != mc.player) {
                 String name = entity.getName().getString().toLowerCase();
-                if (name.contains("npc") || name.contains("dummy") || name.contains("з") || 
+                if (name.contains("training") || name.contains("dummy") || 
                     entity.getUuid().toString().contains("00000000-0000")) {
                     return (LivingEntity) entity;
                 }
