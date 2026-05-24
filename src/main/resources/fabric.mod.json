@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
   "id": "mechaura",
-  "version": "${version}",
+  "version": "1.0.0",
   "name": "MechAura",
-  "description": "KillAura only for sword",
+  "description": "KillAura with bypasses",
   "authors": ["Xisal"],
   "license": "MIT",
   "environment": "client",
