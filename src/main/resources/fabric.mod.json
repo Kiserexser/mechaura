@@ -1,16 +1,22 @@
 {
   "schemaVersion": 1,
   "id": "mechaura",
-  "version": "1.0.0",
+  "version": "${version}",
   "name": "MechAura",
-  "description": "KillAura only for sword with anti-cheat bypasses",
+  "description": "KillAura только для меча с обходами античитов",
   "authors": ["Xisal"],
+  "contact": {},
   "license": "MIT",
+  "icon": "assets/mechaura/icon.png",
   "environment": "client",
   "entrypoints": {
-    "client": ["com.xisal.mechaura.MechAura"]
+    "client": [
+      "com.xisal.mechaura.MechAura"
+    ]
   },
-  "mixins": ["mechaura.mixins.json"],
+  "mixins": [
+    "mechaura.mixins.json"
+  ],
   "depends": {
     "fabricloader": ">=0.15.0",
     "minecraft": ">=1.21.4",
